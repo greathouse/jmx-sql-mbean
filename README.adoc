@@ -73,3 +73,5 @@ def db = new GroovyMBean(server, beanName)
 
 db.select("select * from application_event")
 ----
+
+image::GroovyConsole.png[]
