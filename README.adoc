@@ -1,0 +1,75 @@
+= jmx-sql-mbean
+
+Add `@EnableMBeanExport` to ApplicationStarter.
+
+.Spring Boot properties
+[source,properties]
+----
+spring.jmx.enabled=true
+spring.application.admin.enabled=true
+spring.application.admin.jmx-port=1069
+----
+
+.MBean Definition
+[source,java]
+----
+import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
+import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
+import org.springframework.jdbc.core.JdbcOperations;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
+
+@Endpoint(id = "dbconsole")
+@Component
+public class MbeanSqlRunnerEndpoint {
+    private final JdbcOperations jdbcOperations;
+
+    public MbeanSqlRunnerEndpoint(JdbcOperations jdbcOperations) {
+        this.jdbcOperations = jdbcOperations;
+    }
+
+    @ReadOperation
+    public List<Map<String,Object>> select(String query) {
+        return jdbcOperations.queryForList(query);
+    }
+}
+----
+
+.Transformation `~/.groovy/OutputTransforms.groovy`
+[source,groovy]
+----
+transforms << { result ->
+    if (result instanceof List) {
+        if (result != null && result.size() > 0 && result.get(0) instanceof Map) {
+            def data = result.collect { it.values() as Object }
+            def titles = result.get(0).keySet() as Object[]
+            def table = new JTable(data as Object[][], titles)
+            table.preferredViewportSize = table.preferredSize
+            return new JScrollPane(table)
+        }
+    }
+}
+----
+
+.Groovy Console script
+[source,groovy]
+----
+import java.lang.management.*
+import javax.management.ObjectName
+import javax.management.remote.JMXConnectorFactory as JmxFactory
+import javax.management.remote.JMXServiceURL as JmxUrl
+
+//Set SOCKS proxy if necessary (ie: Heroku)
+//System.getProperties().put( "proxySet", "true" );
+//System.getProperties().put( "socksProxyHost", "127.0.0.1" );
+//System.getProperties().put( "socksProxyPort", "1080" );
+
+def serverUrl = 'service:jmx:rmi:///jndi/rmi://localhost:1234/jmxrmi'
+String beanName = "org.springframework.boot:type=Endpoint,name=dbconsole"
+def server = JmxFactory.connect(new JmxUrl(serverUrl)).MBeanServerConnection
+def db = new GroovyMBean(server, beanName)
+
+db.select("select * from application_event")
+----

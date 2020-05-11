@@ -1,1 +1,0 @@
-# jmx-sql-mbean
